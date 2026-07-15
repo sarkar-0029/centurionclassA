@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatch Register — Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --navy: #16283D;
+    --steel: #2E5679;
+    --steel-light: #4A7BA6;
+    --paper: #F7F4EC;
+    --paper-deep: #EFEADA;
+    --line: #D9D2BC;
+    --ink: #1C2B39;
+    --ink-soft: #55606B;
+    --green: #2F6E4F;
+    --green-bg: #E5EFE6;
+    --amber: #B9752F;
+    --amber-bg: #F6ECDD;
+    --red: #A6362B;
+    --red-bg: #F5E4E1;
+    --radius: 3px;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0; background: var(--paper); color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    background-image: repeating-linear-gradient(180deg, transparent, transparent 27px, rgba(22,40,61,0.035) 28px);
+    min-height: 100vh; padding-bottom: 60px;
+  }
+  .label-caps{ font-family:'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 0.09em; }
+
+  header.masthead{
+    background: var(--navy); color: var(--paper); padding: 24px 32px 20px;
+    border-bottom: 4px double var(--steel-light);
+  }
+  .masthead-inner{ max-width: 1180px; margin: 0 auto; display:flex; align-items:flex-end; justify-content:space-between; gap: 20px; flex-wrap: wrap; }
+  .masthead-title{ font-family:'Oswald', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 0.06em; text-transform: uppercase; margin:0; }
+  .masthead-sub{ font-size: 12px; color: #AFC3D6; letter-spacing: 0.08em; margin-top: 6px; text-transform: uppercase; }
+
+  main{ max-width: 1180px; margin: 0 auto; padding: 26px 32px 0; }
+
+  /* Connection bar */
+  .conn-bar{
+    display:flex; align-items:center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 22px;
+  }
+  .conn-status{ display:flex; align-items:center; gap: 10px; font-size: 12.5px; }
+  .dot{ width: 9px; height: 9px; border-radius: 50%; background: var(--red); flex-shrink:0; }
+  .dot.on{ background: var(--green); }
+  .conn-text b{ color: var(--navy); }
+  .conn-note{ font-size: 11px; color: var(--ink-soft); max-width: 480px; line-height:1.5; }
+
+  section.card{ background: #FFFFFF; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 26px; }
+  .card-head{ display:flex; align-items:center; justify-content:space-between; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--paper-deep); }
+  .card-head h2{ font-family:'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 0.08em; font-size: 15px; margin: 0; color: var(--navy); }
+  .entry-count{ font-size: 11px; color: var(--ink-soft); letter-spacing: 0.05em; }
+
+  form#entry-form{ padding: 22px 20px 20px; }
+  .grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 16px 18px; }
+  @media (max-width: 900px){ .grid{ grid-template-columns: repeat(2,1fr);} }
+  @media (max-width: 560px){ .grid{ grid-template-columns: 1fr;} }
+  .field{ display:flex; flex-direction: column; gap:5px; }
+  .field label{ font-family:'Oswald', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
+  .field input{ font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; padding: 8px 9px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); }
+  .field input:focus{ outline: none; border-color: var(--steel-light); box-shadow: 0 0 0 3px rgba(74,123,166,0.18); background: #fff; }
+  .field.span-2{ grid-column: span 2; }
+
+  .computed-strip{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; padding: 14px 16px; background: var(--paper-deep); border: 1px dashed var(--line); border-radius: var(--radius); }
+  @media (max-width: 640px){ .computed-strip{ grid-template-columns: repeat(2,1fr);} }
+  .computed-item .k{ font-family:'Oswald',sans-serif; font-size:10.5px; letter-spacing:0.08em; text-transform: uppercase; color: var(--ink-soft); }
+  .computed-item .v{ font-size: 15px; font-weight: 600; color: var(--navy); margin-top:2px; }
+
+  .form-actions{ display:flex; justify-content: space-between; align-items:center; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .form-actions .hint{ font-size: 11px; color: var(--ink-soft); }
+
+  button{ font-family:'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 0.07em; font-size: 12.5px; cursor: pointer; border-radius: var(--radius); padding: 10px 18px; border: 1px solid transparent; transition: transform 0.05s ease, opacity 0.15s ease; }
+  button:disabled{ opacity: 0.45; cursor: not-allowed; }
+  button:active{ transform: translateY(1px); }
+  button:focus-visible{ outline: 2px solid var(--steel-light); outline-offset: 2px; }
+  .btn-primary{ background: var(--navy); color: var(--paper); }
+  .btn-primary:hover:not(:disabled){ background: var(--steel); }
+  .btn-ghost{ background: transparent; color: var(--ink-soft); border-color: var(--line); }
+  .btn-ghost:hover:not(:disabled){ background: var(--paper-deep); }
+  .btn-export{ background: var(--green); color: #fff; }
+  .btn-export:hover:not(:disabled){ opacity: 0.9; }
+  .btn-connect{ background: var(--steel-light); color: #fff; }
+  .btn-connect:hover:not(:disabled){ background: var(--steel); }
+  .btn-danger-ghost{ background:transparent; color: var(--red); border-color: var(--red-bg); }
+  .btn-danger-ghost:hover:not(:disabled){ background: var(--red-bg); }
+
+  .table-wrap{ overflow-x: auto; }
+  table{ width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 1200px; }
+  thead th{ background: var(--navy); color: var(--paper); font-family:'Oswald',sans-serif; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; padding: 10px 8px; text-align: left; white-space: nowrap; position: sticky; top:0; }
+  tbody td{ padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tbody tr:nth-child(even){ background: rgba(22,40,61,0.025); }
+  tbody tr:hover{ background: rgba(74,123,166,0.08); }
+  td.num{ text-align: right; font-variant-numeric: tabular-nums; }
+  td.name-cell{ white-space: normal; min-width: 180px; font-weight: 500;}
+
+  .stamp{ display:inline-block; font-family:'Oswald',sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px 2px; border: 1.5px solid; border-radius: 2px; transform: rotate(-2deg); }
+  .stamp.pending{ color: var(--red); border-color: var(--red); background: var(--red-bg); }
+  .stamp.complete{ color: var(--green); border-color: var(--green); background: var(--green-bg); }
+  .stamp.synced{ color: var(--green); border-color: var(--green); background: var(--green-bg); transform: rotate(0); }
+  .stamp.local{ color: var(--amber); border-color: var(--amber); background: var(--amber-bg); transform: rotate(0); }
+
+  .row-actions{ display:flex; gap:6px; }
+  .icon-btn{ background: none; border: 1px solid var(--line); color: var(--ink-soft); padding: 5px 8px; font-size: 11px; border-radius: 2px; }
+  .icon-btn:hover{ background: var(--paper-deep); }
+  .icon-btn.del:hover{ background: var(--red-bg); color: var(--red); border-color: var(--red-bg);}
+
+  .empty-state{ padding: 44px 20px; text-align:center; color: var(--ink-soft); }
+  .empty-state .glyph{ font-size: 26px; margin-bottom: 8px; }
+  .empty-state p{ font-family:'Oswald',sans-serif; letter-spacing: 0.04em; text-transform: uppercase; font-size: 12.5px; }
+
+  .toast{ position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--navy); color: var(--paper); padding: 11px 20px; border-radius: var(--radius); font-family:'Oswald',sans-serif; letter-spacing: 0.05em; font-size: 12.5px; text-transform: uppercase; opacity: 0; pointer-events: none; transition: all 0.25s ease; box-shadow: 0 6px 18px rgba(0,0,0,0.2); z-index: 50; max-width: 90vw; text-align:center;}
+  .toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error{ background: var(--red); }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div>
+      <p class="masthead-title">Dispatch Register</p>
+      <p class="masthead-sub">Writes directly into SALES.xlsm · ORDERS sheet</p>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div class="conn-bar">
+    <div class="conn-status">
+      <span class="dot" id="conn-dot"></span>
+      <span class="conn-text" id="conn-text">Not connected — entries will only be saved in this page</span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span class="conn-note" id="conn-note">Chrome or Edge on desktop, one click, one time per browser session.</span>
+      <button class="btn-connect" id="btn-connect">Connect SALES.xlsm</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>New Entry</h2>
+      <span class="entry-count" id="next-slno-label">S L NO —</span>
+    </div>
+
+    <form id="entry-form">
+      <div class="grid">
+        <div class="field">
+          <label for="f-name">Name</label>
+          <input type="text" id="f-name" required placeholder="e.g. Maithan Alloys Ltd.">
+        </div>
+        <div class="field">
+          <label for="f-pono">PO No.</label>
+          <input type="text" id="f-pono" placeholder="e.g. MAL/3/86/26-27/195">
+        </div>
+        <div class="field">
+          <label for="f-podate">PO Date</label>
+          <input type="date" id="f-podate">
+        </div>
+        <div class="field">
+          <label for="f-unit">Unit</label>
+          <input type="text" id="f-unit" placeholder="M TON" value="M TON">
+        </div>
+
+        <div class="field">
+          <label for="f-poqty">PO Qty</label>
+          <input type="number" id="f-poqty" step="0.001" min="0" placeholder="0.000">
+        </div>
+        <div class="field">
+          <label for="f-duedate">Due Date</label>
+          <input type="date" id="f-duedate">
+        </div>
+        <div class="field">
+          <label for="f-rate">Rate</label>
+          <input type="number" id="f-rate" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div class="field span-2">
+          <label for="f-place">Delivery Place</label>
+          <input type="text" id="f-place" placeholder="e.g. Bankura">
+        </div>
+      </div>
+
+      <div class="computed-strip">
+        <div class="computed-item"><div class="k">Pending Qty</div><div class="v" id="c-pending">0.000</div></div>
+        <div class="computed-item"><div class="k">Status</div><div class="v" id="c-status">—</div></div>
+        <div class="computed-item"><div class="k">PO Value</div><div class="v" id="c-povalue">0.00</div></div>
+        <div class="computed-item"><div class="k">Total (incl. 18% GST)</div><div class="v" id="c-total">0.00</div></div>
+      </div>
+      <p class="form-actions" style="margin-bottom:0;">
+        <span class="hint">Dispatched qty, pending qty, status, PO value, GST and total are calculated automatically — exactly like the formulas already in your ORDERS table.</span>
+      </p>
+
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" id="btn-reset">Clear Form</button>
+        <button type="submit" class="btn-primary" id="btn-submit">Add Entry</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Register (this session)</h2>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span class="entry-count" id="row-count-label">0 entries</span>
+        <button class="btn-danger-ghost" id="btn-clear-all">Clear Log</button>
+        <button class="btn-export" id="btn-export">Export Backup (.xlsx)</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="register-table">
+        <thead>
+          <tr>
+            <th>S L No</th><th>Name</th><th>PO No</th><th>PO Date</th><th>PO Qty</th>
+            <th>Pending Qty</th><th>Status</th><th>Unit</th><th>Due Date</th><th>Rate</th>
+            <th>Delivery Place</th><th>PO Value</th><th>GST</th><th>Total</th><th>Saved To</th>
+          </tr>
+        </thead>
+        <tbody id="register-body"></tbody>
+      </table>
+    </div>
+
+    <div class="empty-state" id="empty-state">
+      <div class="glyph">□</div>
+      <p>No entries yet this session — add the first record above</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  let entries = [];
+  let fileHandle = null;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (Number(n) || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtQty = (n) => (Number(n) || 0).toLocaleString('en-IN', {minimumFractionDigits:3, maximumFractionDigits:3});
+  const fsaSupported = typeof window.showOpenFilePicker === 'function';
+
+  if(!fsaSupported){
+    $('conn-note').textContent = 'This browser can\'t connect directly to a local file. Use Export Backup instead, then paste the rows into SALES.xlsm.';
+    $('btn-connect').disabled = true;
+  }
+
+  // ---------- Computed preview (mirrors the ORDERS table's own formulas) ----------
+  function currentComputed(){
+    const poQty = parseFloat($('f-poqty').value) || 0;
+    const rate = parseFloat($('f-rate').value) || 0;
+    const dispatched = 0; // matches SUMIF(INVOICE...) which is 0 until an invoice references this PO
+    const pending = poQty - dispatched;
+    const status = pending > 3 ? 'PENDING' : 'COMPLETE';
+    const poValue = poQty * rate;
+    const gst = poValue * 0.18;
+    const total = poValue + gst;
+    return {poQty, rate, dispatched, pending, status, poValue, gst, total};
+  }
+  function refreshComputedStrip(){
+    const c = currentComputed();
+    $('c-pending').textContent = fmtQty(c.pending);
+    $('c-status').textContent = c.status;
+    $('c-povalue').textContent = fmt(c.poValue);
+    $('c-total').textContent = fmt(c.total);
+  }
+  ['f-poqty','f-rate'].forEach(id => $(id).addEventListener('input', refreshComputedStrip));
+
+  // ---------- Connect to SALES.xlsm ----------
+  async function ensurePermission(handle){
+    const opts = {mode:'readwrite'};
+    if((await handle.queryPermission(opts)) === 'granted') return true;
+    if((await handle.requestPermission(opts)) === 'granted') return true;
+    return false;
+  }
+
+  $('btn-connect').addEventListener('click', async ()=>{
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Excel Macro-Enabled Workbook', accept: {
+          'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm']
+        }}],
+        multiple: false
+      });
+      const granted = await ensurePermission(handle);
+      if(!granted){ showToast('Write permission was not granted', true); return; }
+      fileHandle = handle;
+      const file = await handle.getFile();
+      $('conn-dot').classList.add('on');
+      $('conn-text').innerHTML = 'Connected — writing straight into <b>' + escapeHtml(file.name) + '</b>';
+      $('conn-note').textContent = 'Every "Add Entry" now saves into the ORDERS sheet of this file.';
+      showToast('Connected to ' + file.name);
+    }catch(err){
+      if(err.name !== 'AbortError') showToast('Could not connect: ' + err.message, true);
+    }
+  });
+
+  // ---------- Locate ORDERS sheet + its table part inside the workbook ----------
+  async function locateOrdersParts(zip){
+    const wbXml = await zip.file('xl/workbook.xml').async('string');
+    const sheetMatch = wbXml.match(/<sheet[^>]*name="ORDERS"[^>]*r:id="([^"]+)"/i)
+                     || wbXml.match(/<sheet[^>]*r:id="([^"]+)"[^>]*name="ORDERS"/i);
+    if(!sheetMatch) throw new Error('No sheet named "ORDERS" found in the workbook.');
+    const sheetRid = sheetMatch[1];
+
+    const wbRels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+    const relRe = new RegExp('<Relationship[^>]*Id="' + sheetRid + '"[^>]*Target="([^"]+)"');
+    const relRe2 = new RegExp('<Relationship[^>]*Target="([^"]+)"[^>]*Id="' + sheetRid + '"');
+    const relMatch = wbRels.match(relRe) || wbRels.match(relRe2);
+    if(!relMatch) throw new Error('Could not resolve the ORDERS sheet\'s internal path.');
+    let sheetPath = relMatch[1];
+    sheetPath = sheetPath.startsWith('/') ? sheetPath.slice(1) : 'xl/' + sheetPath;
+
+    const sheetRelsPath = sheetPath.replace(/([^/]+)$/, '_rels/$1.rels');
+    let tablePath = null;
+    const sheetRelsFile = zip.file(sheetRelsPath);
+    if(sheetRelsFile){
+      const sheetRelsXml = await sheetRelsFile.async('string');
+      const tableRelMatch = sheetRelsXml.match(/<Relationship[^>]*Type="[^"]*\/table"[^>]*Target="([^"]+)"/);
+      if(tableRelMatch) tablePath = tableRelMatch[1].replace('../', 'xl/');
+    }
+    return {sheetPath, tablePath};
+  }
+
+  function escapeXml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function decodeXml(s){ return String(s).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); }
+  function escapeHtml(str){
+    if(str === undefined || str === null) return '';
+    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+  function excelSerial(dateStr){
+    if(!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00Z');
+    const epoch = Date.UTC(1899,11,30);
+    return Math.round((d.getTime() - epoch) / 86400000);
+  }
+
+  // ---------- Append one row directly into SALES.xlsm ----------
+  async function appendRowToWorkbook(handle, entry){
+    const file = await handle.getFile();
+    const buf = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+
+    const {sheetPath, tablePath} = await locateOrdersParts(zip);
+    let sheetXml = await zip.file(sheetPath).async('string');
+
+    const dimMatch = sheetXml.match(/<dimension ref="[A-Z]+1:([A-Z]+)(\d+)"\/>/);
+    if(!dimMatch) throw new Error('Unexpected sheet layout — no dimension tag found on ORDERS.');
+    const lastCol = dimMatch[1];
+    const lastRow = parseInt(dimMatch[2], 10);
+    const newRowNum = lastRow + 1;
+
+    const lastRowRe = new RegExp('<row r="' + lastRow + '"[^>]*>[\\s\\S]*?</row>');
+    const lastRowMatch = sheetXml.match(lastRowRe);
+    const lastRowXml = lastRowMatch ? lastRowMatch[0] : '';
+    function styleFor(col){
+      const m = lastRowXml.match(new RegExp('<c r="' + col + lastRow + '"(?:\\s+s="(\\d+)")?'));
+      return (m && m[1]) ? (' s="' + m[1] + '"') : '';
+    }
+    const lastSlNoMatch = lastRowXml.match(/<c r="A\d+"[^>]*><v>([\d.]+)<\/v><\/c>/);
+    const lastSlNo = lastSlNoMatch ? parseFloat(lastSlNoMatch[1]) : (lastRow - 1);
+    const nextSlNo = lastSlNo + 1;
+
+    // shared strings
+    let sstXml = await zip.file('xl/sharedStrings.xml').async('string');
+    const sstOpenMatch = sstXml.match(/<sst([^>]*)count="(\d+)"([^>]*)uniqueCount="(\d+)"/);
+    let count = sstOpenMatch ? parseInt(sstOpenMatch[2], 10) : 0;
+    let uniqueCount = sstOpenMatch ? parseInt(sstOpenMatch[4], 10) : 0;
+    const siBlocks = sstXml.match(/<si>[\s\S]*?<\/si>/g) || [];
+    const plainStrings = siBlocks.map(b => {
+      const m = b.match(/^<si><t(?:\s[^>]*)?>([\s\S]*?)<\/t><\/si>$/);
+      return m ? decodeXml(m[1]) : null;
+    });
+    let appendedSi = '';
+    function sharedStringIndex(text){
+      count++;
+      const idx = plainStrings.indexOf(text);
+      if(idx !== -1) return idx;
+      const newIdx = plainStrings.length;
+      plainStrings.push(text);
+      appendedSi += '<si><t>' + escapeXml(text) + '</t></si>';
+      uniqueCount++;
+      return newIdx;
+    }
+    function numOrStringCell(col, value, styleAttr){
+      if(value === '' || value === null || value === undefined){
+        return '<c r="' + col + newRowNum + '"' + styleAttr + '/>';
+      }
+      const trimmed = String(value).trim();
+      if(/^-?\d+(\.\d+)?$/.test(trimmed)){
+        return '<c r="' + col + newRowNum + '"' + styleAttr + '><v>' + Number(trimmed) + '</v></c>';
+      }
+      const idx = sharedStringIndex(trimmed);
+      return '<c r="' + col + newRowNum + '"' + styleAttr + ' t="s"><v>' + idx + '</v></c>';
+    }
+
+    const poQty = parseFloat(entry.poqty) || 0;
+    const rate = parseFloat(entry.rate) || 0;
+    const dispatched = 0;
+    const pending = poQty - dispatched;
+    const status = pending > 3 ? 'PENDING' : 'COMPLETE';
+    const poValue = rate * poQty;
+    const gst = poValue * 0.18;
+    const total = poValue + gst;
+
+    const sA=styleFor('A'), sB=styleFor('B'), sC=styleFor('C'), sD=styleFor('D'), sE=styleFor('E'),
+          sF=styleFor('F'), sG=styleFor('G'), sH=styleFor('H'), sI=styleFor('I'), sJ=styleFor('J'),
+          sK=styleFor('K'), sL=styleFor('L'), sM=styleFor('M'), sN=styleFor('N'), sO=styleFor('O');
+
+    const cA = '<c r="A'+newRowNum+'"'+sA+'><f>+A'+lastRow+'+1</f><v>'+nextSlNo+'</v></c>';
+    const cB = numOrStringCell('B', entry.name, sB);
+    const cC = numOrStringCell('C', entry.pono, sC);
+    const cD = entry.podate ? ('<c r="D'+newRowNum+'"'+sD+'><v>'+excelSerial(entry.podate)+'</v></c>') : ('<c r="D'+newRowNum+'"'+sD+'/>');
+    const cE = '<c r="E'+newRowNum+'"'+sE+'><v>'+poQty+'</v></c>';
+    const cF = '<c r="F'+newRowNum+'"'+sF+'><f>SUMIF(INVOICE!D:D,ORDER[[#This Row],[PO NO]],INVOICE!H:H)</f><v>'+dispatched+'</v></c>';
+    const cG = '<c r="G'+newRowNum+'"'+sG+'><f>ORDER[[#This Row],[PO QTY]]-ORDER[[#This Row],[DISPATCHED PO QTY]]</f><v>'+pending+'</v></c>';
+    const cH = '<c r="H'+newRowNum+'"'+sH+' t="str"><f>IF(ORDER[[#This Row],[PENDING PO QTY]]&gt;3,"PENDING","COMPLETE")</f><v>'+status+'</v></c>';
+    const cI = numOrStringCell('I', entry.unit || 'M TON', sI);
+    const cJ = entry.duedate ? ('<c r="J'+newRowNum+'"'+sJ+'><v>'+excelSerial(entry.duedate)+'</v></c>') : ('<c r="J'+newRowNum+'"'+sJ+'/>');
+    const cK = '<c r="K'+newRowNum+'"'+sK+'><v>'+rate+'</v></c>';
+    const cL = numOrStringCell('L', entry.place, sL);
+    const cM = '<c r="M'+newRowNum+'"'+sM+'><f>+ORDER[[#This Row],[RATE]]*ORDER[[#This Row],[PO QTY]]</f><v>'+poValue+'</v></c>';
+    const cN = '<c r="N'+newRowNum+'"'+sN+'><f>+ORDER[[#This Row],[PO VALUE]]*18%</f><v>'+gst+'</v></c>';
+    const cO = '<c r="O'+newRowNum+'"'+sO+'><f>+ORDER[[#This Row],[PO VALUE]]+ORDER[[#This Row],[GST]]</f><v>'+total+'</v></c>';
+
+    const newRowXml = '<row r="'+newRowNum+'" spans="1:15">'+cA+cB+cC+cD+cE+cF+cG+cH+cI+cJ+cK+cL+cM+cN+cO+'</row>';
+
+    sheetXml = sheetXml.replace('</sheetData>', newRowXml + '</sheetData>');
+    sheetXml = sheetXml.replace(/<dimension ref="[A-Z]+1:[A-Z]+\d+"\/>/, '<dimension ref="A1:' + lastCol + newRowNum + '"/>');
+    zip.file(sheetPath, sheetXml);
+
+    sstXml = sstXml.replace(/<\/sst>/, appendedSi + '</sst>');
+    sstXml = sstXml.replace(/<sst([^>]*)count="\d+"([^>]*)uniqueCount="\d+"/, '<sst$1count="' + count + '"$2uniqueCount="' + uniqueCount + '"');
+    zip.file('xl/sharedStrings.xml', sstXml);
+
+    if(tablePath && zip.file(tablePath)){
+      let tableXml = await zip.file(tablePath).async('string');
+      tableXml = tableXml.replace(/ref="[A-Z]+1:[A-Z]+\d+"/g, 'ref="A1:' + lastCol + newRowNum + '"');
+      zip.file(tablePath, tableXml);
+    }
+
+    let wbXml = await zip.file('xl/workbook.xml').async('string');
+    if(/<calcPr[^>]*\/>/.test(wbXml)){
+      wbXml = wbXml.replace(/<calcPr([^>]*)\/>/, (m, attrs) => {
+        if(/fullCalcOnLoad=/.test(attrs)) return '<calcPr' + attrs.replace(/fullCalcOnLoad="[^"]*"/, 'fullCalcOnLoad="1"') + '/>';
+        return '<calcPr' + attrs + ' fullCalcOnLoad="1"/>';
+      });
+      zip.file('xl/workbook.xml', wbXml);
+    }
+
+    if(zip.file('xl/calcChain.xml')){
+      zip.remove('xl/calcChain.xml');
+      let ct = await zip.file('[Content_Types].xml').async('string');
+      ct = ct.replace(/<Override[^>]*calcChain\.xml[^>]*\/>/, '');
+      zip.file('[Content_Types].xml', ct);
+      let wbRels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+      wbRels = wbRels.replace(/<Relationship[^>]*calcChain\.xml[^>]*\/>/, '');
+      zip.file('xl/_rels/workbook.xml.rels', wbRels);
+    }
+
+    const outBuf = await zip.generateAsync({type:'arraybuffer'});
+    const writable = await handle.createWritable();
+    await writable.write(outBuf);
+    await writable.close();
+
+    return {slno: nextSlNo, dispatched, pending, status, poValue, gst, total};
+  }
+
+  // ---------- Form submit ----------
+  $('entry-form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const name = $('f-name').value.trim();
+    if(!name){ $('f-name').focus(); return; }
+
+    const formEntry = {
+      name,
+      pono: $('f-pono').value.trim(),
+      podate: $('f-podate').value,
+      poqty: $('f-poqty').value,
+      unit: $('f-unit').value.trim() || 'M TON',
+      duedate: $('f-duedate').value,
+      rate: $('f-rate').value,
+      place: $('f-place').value.trim()
+    };
+
+    $('btn-submit').disabled = true;
+    $('btn-submit').textContent = 'Saving…';
+
+    let savedTo = 'This page only';
+    let computed = currentComputed();
+
+    if(fileHandle){
+      try{
+        const result = await appendRowToWorkbook(fileHandle, formEntry);
+        computed = { ...computed, ...result };
+        savedTo = 'SALES.xlsm';
+        showToast('Row ' + result.slno + ' written to ORDERS in SALES.xlsm');
+      }catch(err){
+        showToast('Saved locally, but writing to SALES.xlsm failed: ' + err.message, true);
+      }
+    }else{
+      showToast('Entry added to this page (not connected to SALES.xlsm)');
+    }
+
+    entries.push({
+      slno: computed.slno || (entries.length + 1),
+      name: formEntry.name, pono: formEntry.pono, podate: formEntry.podate,
+      poqty: parseFloat(formEntry.poqty)||0, pending: computed.pending, status: computed.status,
+      unit: formEntry.unit, duedate: formEntry.duedate, rate: parseFloat(formEntry.rate)||0,
+      place: formEntry.place, povalue: computed.poValue, gst: computed.gst, total: computed.total,
+      savedTo
+    });
+
+    render();
+    $('entry-form').reset();
+    $('f-unit').value = 'M TON';
+    refreshComputedStrip();
+    $('btn-submit').disabled = false;
+    $('btn-submit').textContent = 'Add Entry';
+    $('f-name').focus();
+  });
+
+  $('btn-reset').addEventListener('click', ()=>{
+    $('entry-form').reset();
+    $('f-unit').value = 'M TON';
+    refreshComputedStrip();
+  });
+
+  $('btn-clear-all').addEventListener('click', ()=>{
+    if(entries.length === 0) return;
+    if(!confirm('Clear the on-page log? This does not undo anything already written to SALES.xlsm.')) return;
+    entries = [];
+    render();
+    showToast('Log cleared');
+  });
+
+  function fmtDate(d){
+    if(!d) return '';
+    const parts = d.split('-');
+    return parts.length === 3 ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : d;
+  }
+
+  function render(){
+    const body = $('register-body');
+    body.innerHTML = '';
+    const has = entries.length > 0;
+    $('empty-state').style.display = has ? 'none' : 'block';
+    $('row-count-label').textContent = entries.length + (entries.length === 1 ? ' entry' : ' entries');
+
+    entries.forEach(en=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="num">${en.slno}</td>
+        <td class="name-cell">${escapeHtml(en.name)}</td>
+        <td>${escapeHtml(en.pono)}</td>
+        <td>${fmtDate(en.podate)}</td>
+        <td class="num">${fmtQty(en.poqty)}</td>
+        <td class="num">${fmtQty(en.pending)}</td>
+        <td><span class="stamp ${en.status==='COMPLETE'?'complete':'pending'}">${en.status}</span></td>
+        <td>${escapeHtml(en.unit)}</td>
+        <td>${fmtDate(en.duedate)}</td>
+        <td class="num">${fmt(en.rate)}</td>
+        <td>${escapeHtml(en.place)}</td>
+        <td class="num">${fmt(en.povalue)}</td>
+        <td class="num">${fmt(en.gst)}</td>
+        <td class="num">${fmt(en.total)}</td>
+        <td><span class="stamp ${en.savedTo==='SALES.xlsm'?'synced':'local'}">${en.savedTo}</span></td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+
+  $('btn-export').addEventListener('click', ()=>{
+    if(entries.length === 0){ showToast('Nothing to export yet'); return; }
+    const rows = entries.map(en => ({
+      'S L NO': en.slno, 'NAME': en.name, 'PO NO': en.pono, 'PO DATE': fmtDate(en.podate),
+      'PO QTY': Number(en.poqty.toFixed(3)), 'PENDING PO QTY': Number(en.pending.toFixed(3)),
+      'STATUS': en.status, 'UNIT': en.unit, 'DUE DATE': fmtDate(en.duedate), 'RATE': Number(en.rate.toFixed(2)),
+      'DELIVERY PLACE': en.place, 'PO VALUE': Number(en.povalue.toFixed(2)), 'GST': Number(en.gst.toFixed(2)),
+      'TOTAL ORDER VALUE': Number(en.total.toFixed(2))
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'New Orders');
+    XLSX.writeFile(wb, 'orders-backup-' + new Date().toISOString().slice(0,10) + '.xlsx');
+    showToast('Exported ' + rows.length + ' rows');
+  });
+
+  let toastTimer = null;
+  function showToast(msg, isError){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.toggle('error', !!isError);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove('show'), isError ? 3800 : 2400);
+  }
+
+  refreshComputedStrip();
+  render();
+})();
+</script>
+
+</body>
+</html>
